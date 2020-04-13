@@ -19,7 +19,7 @@ type Task struct {
 type Master struct {
 	nReduce       int
 	inputFiles    []string
-	intFiles      [][]string
+	intFilenames  [][]string
 	taskChan      chan *Task
 	mapTasks      []*Task
 	reduceTasks   []*Task
@@ -37,7 +37,7 @@ func (m *Master) taskManager(task *Task, wg *sync.WaitGroup) {
 
 		select {
 		case <-task.DoneChan:
-			break
+			return
 		case <-time.After(time.Duration(m.timeoutInSecs) * time.Second):
 			continue
 		}
@@ -71,9 +71,13 @@ func (m *Master) newMapTask(i int) interface{} {
 }
 
 func (m *Master) newReduceTask(i int) interface{} {
+	intFilenames := make([]string, len(m.inputFiles))
+	for j := range intFilenames {
+		intFilenames[j] = m.intFilenames[j][i]
+	}
 	return &ReduceTask{
-		TaskNum:  i,
-		IntFiles: m.intFiles[i],
+		TaskNum:      i,
+		IntFilenames: intFilenames,
 	}
 }
 
@@ -98,7 +102,7 @@ func (m *Master) WorkerReady(args *WorkerReadyArgs, reply *WorkerReadyReply) err
 func (m *Master) MapTaskDone(args *MapTaskDoneArgs, reply *MapTaskDoneReply) error {
 	m.mapTasks[args.TaskNum].DoneChan <- true
 	m.lock.Lock()
-	m.intFiles[args.TaskNum] = args.IntFiles
+	m.intFilenames[args.TaskNum] = args.IntFilenames
 	m.lock.Unlock()
 	return nil
 }
@@ -140,7 +144,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{
 		nReduce:       nReduce,
 		inputFiles:    files,
-		intFiles:      make([][]string, 0, nReduce),
+		intFilenames:  make([][]string, nReduce),
 		taskChan:      make(chan *Task),
 		mapTasks:      make([]*Task, len(files)),
 		reduceTasks:   make([]*Task, nReduce),

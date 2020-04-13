@@ -20,8 +20,8 @@ type MapTask struct {
 
 // ReduceTask describes a reduce task
 type ReduceTask struct {
-	TaskNum  int
-	IntFiles []string
+	TaskNum      int
+	IntFilenames []string
 }
 
 //
@@ -52,8 +52,8 @@ type WorkerReadyReply struct {
 
 // MapTaskDoneArgs is sent once the worker finishes a map task
 type MapTaskDoneArgs struct {
-	TaskNum  int
-	IntFiles []string
+	TaskNum      int
+	IntFilenames []string
 }
 
 // MapTaskDoneReply is empty
