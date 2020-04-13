@@ -1,29 +1,117 @@
 package mr
 
-import "log"
-import "net"
-import "os"
-import "net/rpc"
-import "net/http"
+import (
+	"log"
+	"net"
+	"net/http"
+	"net/rpc"
+	"os"
+	"sync"
+	"time"
+)
 
+type Task struct {
+	Task      interface{}
+	BeginChan chan bool
+	DoneChan  chan bool
+}
 
 type Master struct {
-	// Your definitions here.
+	nReduce       int
+	inputFiles    []string
+	intFilenames  [][]string
+	taskChan      chan *Task
+	mapTasks      []*Task
+	reduceTasks   []*Task
+	timeoutInSecs int
+	done          bool
+	lock          sync.Mutex
+}
 
+func (m *Master) taskManager(task *Task, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for {
+		m.taskChan <- task
+
+		<-task.BeginChan
+
+		select {
+		case <-task.DoneChan:
+			return
+		case <-time.After(time.Duration(m.timeoutInSecs) * time.Second):
+			continue
+		}
+	}
+}
+
+func (m *Master) runTasks(taskMaker func(int) interface{}, tasks []*Task, nTasks int) {
+	var wg sync.WaitGroup
+	// init tasks
+	for i := 0; i < nTasks; i++ {
+		tasks[i] = &Task{
+			Task:      taskMaker(i),
+			BeginChan: make(chan bool),
+			DoneChan:  make(chan bool),
+		}
+	}
+	wg.Add(nTasks)
+	// run task managers
+	for _, task := range tasks {
+		go m.taskManager(task, &wg)
+	}
+	wg.Wait()
+}
+
+func (m *Master) newMapTask(i int) interface{} {
+	return &MapTask{
+		TaskNum:  i,
+		NReduce:  m.nReduce,
+		FileName: m.inputFiles[i],
+	}
+}
+
+func (m *Master) newReduceTask(i int) interface{} {
+	intFilenames := make([]string, len(m.inputFiles))
+	for j := range intFilenames {
+		intFilenames[j] = m.intFilenames[j][i]
+	}
+	return &ReduceTask{
+		TaskNum:      i,
+		IntFilenames: intFilenames,
+	}
+}
+
+func (m *Master) run() {
+	m.server()
+	m.runTasks(m.newMapTask, m.mapTasks, len(m.inputFiles))
+	m.runTasks(m.newReduceTask, m.reduceTasks, m.nReduce)
+	m.done = true
 }
 
 // Your code here -- RPC handlers for the worker to call.
 
-//
-// an example RPC handler.
-//
-// the RPC argument and reply types are defined in rpc.go.
-//
-func (m *Master) Example(args *ExampleArgs, reply *ExampleReply) error {
-	reply.Y = args.X + 1
+// WorkerReady allocates the worker a task to perform
+func (m *Master) WorkerReady(args *WorkerReadyArgs, reply *WorkerReadyReply) error {
+	task := <-m.taskChan
+	task.BeginChan <- true
+	prepWorkerReadyReply(task.Task, reply)
 	return nil
 }
 
+// MapTaskDone signals completion of a map task
+func (m *Master) MapTaskDone(args *MapTaskDoneArgs, reply *MapTaskDoneReply) error {
+	m.mapTasks[args.TaskNum].DoneChan <- true
+	m.lock.Lock()
+	m.intFilenames[args.TaskNum] = args.IntFilenames
+	m.lock.Unlock()
+	return nil
+}
+
+// ReduceTaskDone signals completion of a reduce task
+func (m *Master) ReduceTaskDone(args *ReduceTaskDoneArgs, reply *ReduceTaskDoneReply) error {
+	m.reduceTasks[args.TaskNum].DoneChan <- true
+	return nil
+}
 
 //
 // start a thread that listens for RPCs from worker.go
@@ -41,30 +129,29 @@ func (m *Master) server() {
 	go http.Serve(l, nil)
 }
 
-//
-// main/mrmaster.go calls Done() periodically to find out
+// Done is called periodically by main/mrmaster.go to find out
 // if the entire job has finished.
 //
 func (m *Master) Done() bool {
-	ret := false
-
-	// Your code here.
-
-
-	return ret
+	return m.done
 }
 
-//
-// create a Master.
+// MakeMaster create a Master.
 // main/mrmaster.go calls this function.
 // nReduce is the number of reduce tasks to use.
 //
 func MakeMaster(files []string, nReduce int) *Master {
-	m := Master{}
+	m := Master{
+		nReduce:       nReduce,
+		inputFiles:    files,
+		intFilenames:  make([][]string, nReduce),
+		taskChan:      make(chan *Task),
+		mapTasks:      make([]*Task, len(files)),
+		reduceTasks:   make([]*Task, nReduce),
+		timeoutInSecs: 10,
+		done:          false,
+	}
 
-	// Your code here.
-
-
-	m.server()
+	go m.run()
 	return &m
 }
