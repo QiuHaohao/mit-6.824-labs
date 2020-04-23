@@ -97,7 +97,6 @@ func getElectionTimerDuration() time.Duration {
 
 func (rf *Raft) runElectionTimer() {
 	for {
-		DPrintf("[%d] - currentTerm: %v, status: %v, votedFor: %v", rf.me, rf.currentTerm, rf.status, rf.votedFor)
 		select {
 		case <-time.After(getElectionTimerDuration()):
 			rf.onElectionTimerTimeout()
@@ -108,9 +107,12 @@ func (rf *Raft) runElectionTimer() {
 }
 
 func (rf *Raft) onElectionTimerTimeout() {
+	rf.mu.Lock()
 	if rf.status != Leader {
 		go rf.startNewElection()
 	}
+	rf.mu.Unlock()
+
 }
 
 func (rf *Raft) startNewElection() {
@@ -155,9 +157,7 @@ func (rf *Raft) startNewElection() {
 		if count >= len(rf.peers)/2+1 && rf.status == Candidate && rf.currentTerm == currentTerm {
 			rf.status = Leader
 			DPrintf("[%d] - Elected for term %d", rf.me, rf.currentTerm)
-			rf.mu.Unlock()
-			rf.sendHeartbeats()
-			rf.mu.Lock()
+			go rf.sendHeartbeats()
 		}
 		rf.mu.Unlock()
 		cond.L.Unlock()
@@ -185,16 +185,22 @@ func (rf *Raft) sendHeartbeats() {
 
 func (rf *Raft) runHeartbeat() {
 	for range time.NewTicker(HeartbeatIntervalInMs * time.Millisecond).C {
+		rf.mu.Lock()
 		if rf.status == Leader {
-			rf.sendHeartbeats()
+			go rf.sendHeartbeats()
 		}
+		rf.mu.Unlock()
 	}
 }
 
 // return currentTerm and whether this server
 // believes it is the leader.
 func (rf *Raft) GetState() (int, bool) {
-	return rf.currentTerm, rf.status == Leader
+	rf.mu.Lock()
+	currentTerm := rf.currentTerm
+	isLeader := rf.status == Leader
+	rf.mu.Unlock()
+	return currentTerm, isLeader
 }
 
 //
