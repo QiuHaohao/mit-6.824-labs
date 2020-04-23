@@ -97,6 +97,7 @@ func getElectionTimerDuration() time.Duration {
 
 func (rf *Raft) runElectionTimer() {
 	for {
+		DPrintf("[%d] - currentTerm: %v, status: %v, votedFor: %v", rf.me, rf.currentTerm, rf.status, rf.votedFor)
 		select {
 		case <-time.After(getElectionTimerDuration()):
 			rf.onElectionTimerTimeout()
@@ -108,7 +109,7 @@ func (rf *Raft) runElectionTimer() {
 
 func (rf *Raft) onElectionTimerTimeout() {
 	if rf.status != Leader {
-		rf.startNewElection()
+		go rf.startNewElection()
 	}
 }
 
@@ -149,14 +150,16 @@ func (rf *Raft) startNewElection() {
 	for {
 		cond.L.Lock()
 		cond.Wait()
+		rf.mu.Lock()
 		DPrintf("[%d] - New vote for term %d, now %d votes", rf.me, rf.currentTerm, count)
-		if count >= len(rf.peers)/2+1 && rf.status == Candidate {
-			rf.mu.Lock()
+		if count >= len(rf.peers)/2+1 && rf.status == Candidate && rf.currentTerm == currentTerm {
 			rf.status = Leader
 			DPrintf("[%d] - Elected for term %d", rf.me, rf.currentTerm)
 			rf.mu.Unlock()
 			rf.sendHeartbeats()
+			rf.mu.Lock()
 		}
+		rf.mu.Unlock()
 		cond.L.Unlock()
 	}
 }
@@ -341,6 +344,7 @@ type AppendEntriesReply struct {
 }
 
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
+	DPrintf("[%d] - AppendEntries for term %d received from %d", rf.me, args.Term, args.LeaderID)
 	rf.mu.Lock()
 	rf.updateTerm(args.Term)
 	reply.Term = rf.currentTerm
@@ -356,6 +360,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 }
 
 func (rf *Raft) sendAppendEntries(server int, term int, leaderID int) (bool, int, bool) {
+	DPrintf("[%d] - AppendEntries for term %d sent to %d", rf.me, term, server)
 	args := &AppendEntriesArgs{
 		Term:     term,
 		LeaderID: leaderID,
