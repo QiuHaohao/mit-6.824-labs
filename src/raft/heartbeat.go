@@ -15,7 +15,7 @@ func (rf *Raft) sendHeartbeats() {
 		prevLogTerm, err := rf.getLogTerm(prevLogIndices[i])
 		// set to -1 if log is empty
 		if err != nil {
-			prevLogTerm = -1
+			prevLogTerm = 0
 		}
 		prevLogTerms[i] = prevLogTerm
 	}

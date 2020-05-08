@@ -6,7 +6,7 @@ import (
 )
 
 // Debugging
-const Debug = 0
+const Debug = 1
 
 var errNoSuchEntry = errors.New("no such entry")
 

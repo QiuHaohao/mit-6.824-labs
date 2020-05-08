@@ -260,12 +260,14 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	if !(rf.status == Leader) {
 		return -1, rf.currentTerm, false
 	}
-
+	DPrintf("[%d] - Starting to replicate log %v", rf.me, command)
 	rf.log = append(rf.log, &LogEntry{
 		Command: command,
 		Term:    rf.currentTerm,
 	})
-	return rf.getLastLogIndex(), rf.currentTerm, true
+	go rf.sendAppendEntriesToAll()
+	// index in the tests starts with 1
+	return rf.getLastLogIndex() + 1, rf.currentTerm, true
 }
 
 // take the lock until all msgs are consumed by the clients
@@ -279,7 +281,7 @@ func (rf *Raft) applyNewMsgs() {
 		}
 		rf.applyCh <- ApplyMsg{
 			Command:      logEntry.Command,
-			CommandIndex: commandIndex,
+			CommandIndex: commandIndex + 1,
 			CommandValid: true,
 		}
 		rf.lastApplied++
@@ -329,6 +331,8 @@ func Make(peers []*labrpc.ClientEnd, me int,
 		currentTerm:        0,
 		votedFor:           Nobody,
 		applyCh:            applyCh,
+		commitIndex:        -1,
+		lastApplied:        -1,
 	}
 
 	// Your initialization code here (2A, 2B, 2C).

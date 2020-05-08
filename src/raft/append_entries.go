@@ -15,7 +15,11 @@ type AppendEntriesReply struct {
 }
 
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
-	DPrintf("[%d] - AppendEntries for term %d received from %d", rf.me, args.Term, args.LeaderID)
+	if len(args.Entries) == 0 {
+		DPrintf("[%d] - Empty AppendEntries for term %d received from %d", rf.me, args.Term, args.LeaderID)
+	} else {
+		DPrintf("[%d] - Non-empty AppendEntries for term %d received from %d", rf.me, args.Term, args.LeaderID)
+	}
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
@@ -27,7 +31,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		// If this is not from the current leader, do not need to
 		// reset the elecion timer
 		return
-	} else if !rf.containsLog(args.PrevLogIndex, args.PrevLogTerm) {
+	} else if !rf.containsLog(args.PrevLogIndex, args.PrevLogTerm) && (args.PrevLogIndex != -1) {
 		reply.Success = false
 	} else {
 		reply.Success = true
@@ -53,7 +57,11 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 func (rf *Raft) sendAppendEntries(server int, term int,
 	prevLogIndex int, prevLogTerm int, entries []*LogEntry, leaderCommit int) (bool, int, bool) {
-	DPrintf("[%d] - AppendEntries for term %d sent to %d", rf.me, term, server)
+	if len(entries) == 0 {
+		DPrintf("[%d] - Empty AppendEntries for term %d sent to %d", rf.me, term, server)
+	} else {
+		DPrintf("[%d] - Non-empty AppendEntries for term %d sent to %d", rf.me, term, server)
+	}
 	args := &AppendEntriesArgs{
 		Term:         term,
 		LeaderID:     rf.me,
@@ -82,6 +90,7 @@ func (rf *Raft) handleAppendEntries(server int, term int,
 		if success {
 			indexLastLogSent := prevLogIndex + len(entries)
 			// matchIndex is monotonically increasing
+			DPrintf("[%d] - AppendEntries from %d success and OK, indexLastLogSent: %v, rf.matchIndex[%d]: %d", rf.me, server, indexLastLogSent, server, rf.matchIndex[server])
 			if indexLastLogSent > rf.matchIndex[server] {
 				rf.matchIndex[server] = indexLastLogSent
 				indexOfLastConsensus := rf.getIndexOfLastConsensus()
@@ -93,7 +102,7 @@ func (rf *Raft) handleAppendEntries(server int, term int,
 			}
 			rf.nextIndex[server] = indexLastLogSent + 1
 			// failing because of log inconsistency
-		} else if termRecved == rf.currentTerm {
+		} else if termRecved == rf.currentTerm && rf.nextIndex[server] > 0 {
 			rf.nextIndex[server]--
 			go rf.retryHandleAppendEntries(server, term, prevLogIndex-1)
 		}
@@ -132,11 +141,12 @@ func (rf *Raft) sendAppendEntriesToAll() {
 	rf.mu.Lock()
 	currentTerm := rf.currentTerm
 	commitIndex := rf.commitIndex
+
 	for i := range rf.nextIndex {
 		prevLogIndices[i] = rf.nextIndex[i] - 1
 		prevLogTerm, err := rf.getLogTerm(prevLogIndices[i])
 		if err != nil {
-			panic("prev index not found")
+			prevLogTerm = 0
 		}
 		prevLogTerms[i] = prevLogTerm
 	}
@@ -147,14 +157,18 @@ func (rf *Raft) sendAppendEntriesToAll() {
 	copy(relevantLog, rf.getLogSlice(startRelevantLogIndex, endRelevantLogIndex))
 	rf.mu.Unlock()
 
+	DPrintf("[%d] - ! Sending to non-empty append entries to all", rf.me)
+
 	for i := range rf.peers {
 		if i != rf.me {
+			DPrintf("[%d] - ! Sending to non-empty append entries to %d", rf.me, i)
 			logEntriesToSend := getLogSliceFromPartialLog(
 				relevantLog,
 				startRelevantLogIndex,
 				prevLogIndices[i]+1,
 				endRelevantLogIndex,
 			)
+			DPrintf("[%d] - ! %v", rf.me, logEntriesToSend)
 			go rf.handleAppendEntries(
 				i, currentTerm,
 				prevLogIndices[i],

@@ -15,7 +15,7 @@ func (rf *Raft) initLeaderState() {
 		rf.nextIndex[i] = nextIndexInitValue
 	}
 	for i := range rf.matchIndex {
-		rf.matchIndex[i] = 0
+		rf.matchIndex[i] = -1
 	}
 }
 
@@ -44,6 +44,7 @@ func (rf *Raft) runElectionTimer() {
 func (rf *Raft) onElectionTimerTimeout() {
 	rf.mu.Lock()
 	if rf.status != Leader {
+		DPrintf("[%d] - ElectionTimeout", rf.me)
 		go rf.startNewElection()
 	}
 	rf.mu.Unlock()
