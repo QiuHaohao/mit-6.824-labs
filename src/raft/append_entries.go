@@ -26,32 +26,35 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	rf.updateTerm(args.Term)
 	reply.Term = rf.currentTerm
 
-	if args.Term < rf.currentTerm {
+	if args.Term < rf.currentTerm ||
+		!rf.containsLog(args.PrevLogIndex, args.PrevLogTerm) && (args.PrevLogIndex != -1) {
 		reply.Success = false
-		// If this is not from the current leader, do not need to
+		DPrintf("[%d] X log: %v, prefLogIndex: %d, logReceived: %v, leaderCommit: %d", rf.me, rf.log, args.PrevLogIndex, args.Entries, args.LeaderCommit)
+		// If this is not from the current leader or a future leader, do not need to
 		// reset the elecion timer
 		return
-	} else if !rf.containsLog(args.PrevLogIndex, args.PrevLogTerm) && (args.PrevLogIndex != -1) {
-		reply.Success = false
-	} else {
-		reply.Success = true
-		rf.appendLogEntries(args.Entries, args.PrevLogIndex)
 	}
+	DPrintf("[%d] - log: %v, prefLogIndex: %d, logReceived: %v, leaderCommit: %d", rf.me, rf.log, args.PrevLogIndex, args.Entries, args.LeaderCommit)
+	reply.Success = true
+	rf.appendLogEntries(args.Entries, args.PrevLogIndex)
+	rf.updateCommitIndex(args.LeaderCommit, args.PrevLogIndex+len(args.Entries))
 	// reset election timer
 	rf.resetElectionTimer <- true
-	// update commit index
-	if args.LeaderCommit > rf.commitIndex {
-		indexLastNewEntry := args.PrevLogIndex + len(args.Entries)
-		if args.LeaderCommit < indexLastNewEntry {
-			rf.commitIndex = args.LeaderCommit
+	// convert to follower if is candidate
+	if rf.status == Candidate {
+		rf.status = Follower
+	}
+}
+
+func (rf *Raft) updateCommitIndex(leaderCommit, indexLastNewEntry int) {
+	if leaderCommit > rf.commitIndex {
+		DPrintf("[%d] - updating commitIndex - leaderCommit: %d, indexOfLastNewEntry: %d", rf.me, leaderCommit, indexLastNewEntry)
+		if leaderCommit < indexLastNewEntry {
+			rf.commitIndex = leaderCommit
 		} else {
 			rf.commitIndex = indexLastNewEntry
 		}
 		rf.applyNewMsgs()
-	}
-	// convert to follower if is candidate
-	if rf.status == Candidate {
-		rf.status = Follower
 	}
 }
 
@@ -117,17 +120,15 @@ func (rf *Raft) retryHandleAppendEntries(server int, term int, prevLogIndex int)
 	if term != rf.currentTerm {
 		return
 	}
-
 	prevLogTerm, err := rf.getLogTerm(prevLogIndex)
 	if err != nil {
 		return
 	}
-
 	go rf.handleAppendEntries(
 		server, term,
 		prevLogIndex,
 		prevLogTerm,
-		rf.getLogSliceFrom(prevLogTerm+1),
+		rf.getLogSliceFrom(prevLogIndex+1),
 		rf.commitIndex,
 	)
 }

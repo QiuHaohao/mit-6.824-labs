@@ -35,13 +35,6 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 			(rf.votedFor == Nobody || rf.votedFor == args.CandidateID) &&
 			rf.isAtLeastAsUpToDate(args.LastLogIndex, args.LastLogTerm)
 
-	if args.Term < rf.currentTerm {
-		reply.Term = rf.currentTerm
-		reply.VoteGranted = false
-	} else {
-		reply.Term = rf.currentTerm
-		reply.VoteGranted = rf.votedFor == Nobody || rf.votedFor == args.CandidateID
-	}
 	if reply.VoteGranted {
 		rf.votedFor = args.CandidateID
 	}

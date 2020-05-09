@@ -265,6 +265,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		Command: command,
 		Term:    rf.currentTerm,
 	})
+	rf.matchIndex[rf.me]++
 	go rf.sendAppendEntriesToAll()
 	// index in the tests starts with 1
 	return rf.getLastLogIndex() + 1, rf.currentTerm, true
@@ -274,6 +275,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 // maybe can
 func (rf *Raft) applyNewMsgs() {
 	for rf.commitIndex > rf.lastApplied {
+		DPrintf("[%d] - committing log entry at %d", rf.me, rf.commitIndex)
 		commandIndex := rf.lastApplied + 1
 		logEntry, err := rf.getLogAtIndex(commandIndex)
 		if err != nil {

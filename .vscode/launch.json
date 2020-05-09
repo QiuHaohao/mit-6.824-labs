@@ -5,12 +5,12 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Test 2B",
+      "name": "Test TestFailAgree2B",
       "type": "go",
       "request": "launch",
       "mode": "test",
       "program": "${workspaceFolder}/src/raft",
-      "args": ["-test.run", "2B"]
+      "args": ["-test.run", "TestFailAgree2B"]
     },
     {
       "name": "Launch",
