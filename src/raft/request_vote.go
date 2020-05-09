@@ -29,6 +29,9 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	defer rf.mu.Unlock()
 	rf.updateTerm(args.Term)
 	DPrintf("[%d] - RequestVote for term %d received from %d, votedFor: %v", rf.me, args.Term, args.CandidateID, rf.votedFor)
+	DPrintf("[%d] - args.Term >= rf.currentTerm: %v", rf.me, args.Term >= rf.currentTerm)
+	DPrintf("[%d] - (rf.votedFor == Nobody || rf.votedFor == args.CandidateID): %v", rf.me, (rf.votedFor == Nobody || rf.votedFor == args.CandidateID))
+	DPrintf("[%d] - rf.isAtLeastAsUpToDate(args.LastLogIndex, args.LastLogTerm): %v", rf.me, rf.isAtLeastAsUpToDate(args.LastLogIndex, args.LastLogTerm))
 	reply.Term = rf.currentTerm
 	reply.VoteGranted =
 		args.Term >= rf.currentTerm &&

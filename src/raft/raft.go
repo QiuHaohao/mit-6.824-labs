@@ -143,7 +143,7 @@ func (rf *Raft) isAtLeastAsUpToDate(lastLogIndex, lastLogTerm int) bool {
 	}
 	myLastLogIndex := rf.getLastLogIndex()
 	return (lastLogTerm > myLastLogTerm) ||
-		(lastLogTerm == myLastLogTerm && lastLogIndex > myLastLogIndex)
+		(lastLogTerm == myLastLogTerm && lastLogIndex >= myLastLogIndex)
 }
 
 func (rf *Raft) containsLog(index, term int) bool {
@@ -265,7 +265,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		Command: command,
 		Term:    rf.currentTerm,
 	})
-	rf.matchIndex[rf.me]++
+	rf.matchIndex[rf.me] = rf.getLastLogIndex()
 	go rf.sendAppendEntriesToAll()
 	// index in the tests starts with 1
 	return rf.getLastLogIndex() + 1, rf.currentTerm, true
@@ -275,7 +275,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 // maybe can
 func (rf *Raft) applyNewMsgs() {
 	for rf.commitIndex > rf.lastApplied {
-		DPrintf("[%d] - committing log entry at %d", rf.me, rf.commitIndex)
+		DPrintf("[%d] - committing log entry at %d", rf.me, rf.lastApplied+1)
 		commandIndex := rf.lastApplied + 1
 		logEntry, err := rf.getLogAtIndex(commandIndex)
 		if err != nil {

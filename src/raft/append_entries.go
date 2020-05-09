@@ -60,11 +60,6 @@ func (rf *Raft) updateCommitIndex(leaderCommit, indexLastNewEntry int) {
 
 func (rf *Raft) sendAppendEntries(server int, term int,
 	prevLogIndex int, prevLogTerm int, entries []*LogEntry, leaderCommit int) (bool, int, bool) {
-	if len(entries) == 0 {
-		DPrintf("[%d] - Empty AppendEntries for term %d sent to %d", rf.me, term, server)
-	} else {
-		DPrintf("[%d] - Non-empty AppendEntries for term %d sent to %d", rf.me, term, server)
-	}
 	args := &AppendEntriesArgs{
 		Term:         term,
 		LeaderID:     rf.me,
@@ -80,6 +75,12 @@ func (rf *Raft) sendAppendEntries(server int, term int,
 
 func (rf *Raft) handleAppendEntries(server int, term int,
 	prevLogIndex int, prevLogTerm int, entries []*LogEntry, leaderCommit int) {
+
+	if len(entries) == 0 {
+		DPrintf("[%d] - Empty AppendEntries for term %d sent to %d, nextIndex[%d]: %d", rf.me, term, server, server, rf.nextIndex[server])
+	} else {
+		DPrintf("[%d] - Non-empty AppendEntries for term %d sent to %d, nextIndex[%d]: %d", rf.me, term, server, server, rf.nextIndex[server])
+	}
 	ok, termRecved, success := rf.sendAppendEntries(
 		server, term,
 		prevLogIndex,
@@ -93,7 +94,7 @@ func (rf *Raft) handleAppendEntries(server int, term int,
 		if success {
 			indexLastLogSent := prevLogIndex + len(entries)
 			// matchIndex is monotonically increasing
-			DPrintf("[%d] - AppendEntries from %d success and OK, indexLastLogSent: %v, rf.matchIndex[%d]: %d", rf.me, server, indexLastLogSent, server, rf.matchIndex[server])
+			DPrintf("[%d] - AppendEntries from %d success and OK, indexLastLogSent: %v, rf.matchIndex: %v", rf.me, server, indexLastLogSent, rf.matchIndex)
 			if indexLastLogSent > rf.matchIndex[server] {
 				rf.matchIndex[server] = indexLastLogSent
 				indexOfLastConsensus := rf.getIndexOfLastConsensus()
@@ -103,7 +104,9 @@ func (rf *Raft) handleAppendEntries(server int, term int,
 					rf.applyNewMsgs()
 				}
 			}
-			rf.nextIndex[server] = indexLastLogSent + 1
+			if rf.nextIndex[server] < indexLastLogSent+1 {
+				rf.nextIndex[server] = indexLastLogSent + 1
+			}
 			// failing because of log inconsistency
 		} else if termRecved == rf.currentTerm && rf.nextIndex[server] > 0 {
 			rf.nextIndex[server]--
@@ -169,7 +172,6 @@ func (rf *Raft) sendAppendEntriesToAll() {
 				prevLogIndices[i]+1,
 				endRelevantLogIndex,
 			)
-			DPrintf("[%d] - ! %v", rf.me, logEntriesToSend)
 			go rf.handleAppendEntries(
 				i, currentTerm,
 				prevLogIndices[i],
