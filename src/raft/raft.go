@@ -18,16 +18,17 @@ package raft
 //
 
 import (
+	"bytes"
 	"errors"
 	"sort"
 	"sync"
 	"sync/atomic"
 
+	"../labgob"
 	"../labrpc"
 )
 
 // import "bytes"
-// import "../labgob"
 
 //
 // as each Raft peer becomes aware that successive log entries are
@@ -180,6 +181,7 @@ func (rf *Raft) appendLogEntries(log []*LogEntry, prevIndex int) {
 			rf.getLogSlice(0, prevIndex+1),
 			log...,
 		)
+		rf.persist()
 	}
 }
 
@@ -189,6 +191,7 @@ func (rf *Raft) updateTerm(termRecved int) {
 		rf.votedFor = Nobody
 		rf.resetElectionTimer <- true
 		rf.status = Follower
+		rf.persist()
 	}
 }
 
@@ -210,12 +213,13 @@ func (rf *Raft) GetState() (int, bool) {
 func (rf *Raft) persist() {
 	// Your code here (2C).
 	// Example:
-	// w := new(bytes.Buffer)
-	// e := labgob.NewEncoder(w)
-	// e.Encode(rf.xxx)
-	// e.Encode(rf.yyy)
-	// data := w.Bytes()
-	// rf.persister.SaveRaftState(data)
+	w := new(bytes.Buffer)
+	e := labgob.NewEncoder(w)
+	e.Encode(rf.currentTerm)
+	e.Encode(rf.votedFor)
+	e.Encode(rf.log)
+	data := w.Bytes()
+	rf.persister.SaveRaftState(data)
 }
 
 //
@@ -227,17 +231,21 @@ func (rf *Raft) readPersist(data []byte) {
 	}
 	// Your code here (2C).
 	// Example:
-	// r := bytes.NewBuffer(data)
-	// d := labgob.NewDecoder(r)
-	// var xxx
-	// var yyy
-	// if d.Decode(&xxx) != nil ||
-	//    d.Decode(&yyy) != nil {
-	//   error...
-	// } else {
-	//   rf.xxx = xxx
-	//   rf.yyy = yyy
-	// }
+	r := bytes.NewBuffer(data)
+	d := labgob.NewDecoder(r)
+	var currentTerm int
+	var votedFor int
+	var log []*LogEntry
+	if d.Decode(&currentTerm) != nil ||
+		d.Decode(&votedFor) != nil ||
+		d.Decode(&log) != nil {
+		// do nothing
+		return
+	} else {
+		rf.currentTerm = currentTerm
+		rf.votedFor = votedFor
+		rf.log = log
+	}
 }
 
 //
@@ -265,6 +273,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		Command: command,
 		Term:    rf.currentTerm,
 	})
+	rf.persist()
 	rf.matchIndex[rf.me] = rf.getLastLogIndex()
 	go rf.sendAppendEntriesToAll()
 	// index in the tests starts with 1

@@ -64,6 +64,7 @@ func (rf *Raft) startNewElection() {
 	if err != nil {
 		lastLogTerm = 0
 	}
+	rf.persist()
 	DPrintf("[%d] - Starting new election for term %d done", me, currentTerm)
 	rf.mu.Unlock()
 
