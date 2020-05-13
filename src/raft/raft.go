@@ -220,6 +220,7 @@ func (rf *Raft) persist() {
 	e.Encode(rf.log)
 	data := w.Bytes()
 	rf.persister.SaveRaftState(data)
+	DPrintf("[%d] - Persisting states: currentTerm: %v, votedFor: %v, log: %v", rf.me, rf.currentTerm, rf.votedFor, rf.log)
 }
 
 //
@@ -241,11 +242,11 @@ func (rf *Raft) readPersist(data []byte) {
 		d.Decode(&log) != nil {
 		// do nothing
 		return
-	} else {
-		rf.currentTerm = currentTerm
-		rf.votedFor = votedFor
-		rf.log = log
 	}
+	rf.currentTerm = currentTerm
+	rf.votedFor = votedFor
+	rf.log = log
+	DPrintf("[%d] - Read persisted states, currentTerm: %v, votedFor: %v, log: %v", rf.me, currentTerm, votedFor, log)
 }
 
 //

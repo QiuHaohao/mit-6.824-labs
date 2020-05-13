@@ -94,7 +94,6 @@ func (rf *Raft) handleAppendEntries(server int, term int,
 		if success {
 			indexLastLogSent := prevLogIndex + len(entries)
 			// matchIndex is monotonically increasing
-			DPrintf("[%d] - AppendEntries from %d success and OK, indexLastLogSent: %v, rf.matchIndex: %v", rf.me, server, indexLastLogSent, rf.matchIndex)
 			if indexLastLogSent > rf.matchIndex[server] {
 				rf.matchIndex[server] = indexLastLogSent
 				indexOfLastConsensus := rf.getIndexOfLastConsensus()
@@ -107,6 +106,7 @@ func (rf *Raft) handleAppendEntries(server int, term int,
 			if rf.nextIndex[server] < indexLastLogSent+1 {
 				rf.nextIndex[server] = indexLastLogSent + 1
 			}
+			DPrintf("[%d] - AppendEntries from %d success and OK, indexLastLogSent: %v, rf.matchIndex: %v, rf.nextIndex: %v", rf.me, server, indexLastLogSent, rf.matchIndex, rf.nextIndex)
 			// failing because of log inconsistency
 		} else if termRecved == rf.currentTerm && rf.nextIndex[server] > 0 {
 			rf.nextIndex[server]--

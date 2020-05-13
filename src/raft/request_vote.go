@@ -40,6 +40,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 
 	if reply.VoteGranted {
 		rf.votedFor = args.CandidateID
+		rf.persist()
 	}
 	DPrintf("[%d] - RequestVote for term %d from %d done: %v, votedFor: %v", rf.me, args.Term, args.CandidateID, reply, rf.votedFor)
 }
