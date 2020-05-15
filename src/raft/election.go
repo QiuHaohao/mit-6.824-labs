@@ -44,10 +44,7 @@ func (rf *Raft) runElectionTimer() {
 func (rf *Raft) onElectionTimerTimeout() {
 	rf.mu.Lock()
 	if rf.status != Leader {
-		DPrintf("[%d] -   ElectionTimeout: log %v", rf.me, rf.log)
-		if len(rf.log) == 1 {
-			DPrintf("[%d] - log[0]: %v", rf.me, *(rf.log[0]))
-		}
+		DPrintf("[%d] -   ElectionTimeout", rf.me)
 		go rf.startNewElection()
 	}
 	rf.mu.Unlock()

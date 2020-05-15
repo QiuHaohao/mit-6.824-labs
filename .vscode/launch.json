@@ -5,12 +5,12 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Test TestPersist12C",
+      "name": "Test TestFigure8Unreliable2C",
       "type": "go",
       "request": "launch",
       "mode": "test",
       "program": "${workspaceFolder}/src/raft",
-      "args": ["-test.run", "TestPersist12C"]
+      "args": ["-test.run", "TestFigure8Unreliable2C"]
     },
     {
       "name": "Launch",

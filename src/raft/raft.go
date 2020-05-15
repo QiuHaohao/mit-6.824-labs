@@ -43,9 +43,10 @@ import (
 //
 
 const (
-	HeartbeatIntervalInMs = 110
-	ElectionTimerMin      = 310
-	ElectionTimerMax      = 930
+	HeartbeatIntervalInMs       = 110
+	ElectionTimerMin            = 310
+	ElectionTimerMax            = 930
+	NBackOffWhenLogInconsistent = 10
 )
 
 type LogEntry struct {
@@ -220,7 +221,7 @@ func (rf *Raft) persist() {
 	e.Encode(rf.log)
 	data := w.Bytes()
 	rf.persister.SaveRaftState(data)
-	DPrintf("[%d] - Persisting states: currentTerm: %v, votedFor: %v, log: %v", rf.me, rf.currentTerm, rf.votedFor, rf.log)
+	DPrintf("[%d] - Persisting states: currentTerm: %v, votedFor: %v, log: %v", rf.me, rf.currentTerm, rf.votedFor, len(rf.log))
 }
 
 //
@@ -246,7 +247,7 @@ func (rf *Raft) readPersist(data []byte) {
 	rf.currentTerm = currentTerm
 	rf.votedFor = votedFor
 	rf.log = log
-	DPrintf("[%d] - Read persisted states, currentTerm: %v, votedFor: %v, log: %v", rf.me, currentTerm, votedFor, log)
+	DPrintf("[%d] - Read persisted states, currentTerm: %v, votedFor: %v, len(log): %d", rf.me, currentTerm, votedFor, len(log))
 }
 
 //
