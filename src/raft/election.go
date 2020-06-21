@@ -22,7 +22,7 @@ func (rf *Raft) initLeaderState() {
 func (rf *Raft) becomeLeader() {
 	rf.initLeaderState()
 	rf.status = Leader
-	go rf.sendHeartbeats()
+	go rf.sendAppendEntriesToAll()
 	DPrintf("[%d] - Elected for term %d", rf.me, rf.currentTerm)
 }
 
@@ -31,7 +31,7 @@ func getElectionTimerDuration() time.Duration {
 }
 
 func (rf *Raft) runElectionTimer() {
-	for {
+	for !rf.killed() {
 		select {
 		case <-time.After(getElectionTimerDuration()):
 			rf.onElectionTimerTimeout()
@@ -44,7 +44,7 @@ func (rf *Raft) runElectionTimer() {
 func (rf *Raft) onElectionTimerTimeout() {
 	rf.mu.Lock()
 	if rf.status != Leader {
-		DPrintf("[%d] - ElectionTimeout", rf.me)
+		DPrintf("[%d] -   ElectionTimeout", rf.me)
 		go rf.startNewElection()
 	}
 	rf.mu.Unlock()
@@ -64,6 +64,7 @@ func (rf *Raft) startNewElection() {
 	if err != nil {
 		lastLogTerm = 0
 	}
+	rf.persist()
 	DPrintf("[%d] - Starting new election for term %d done", me, currentTerm)
 	rf.mu.Unlock()
 

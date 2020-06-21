@@ -8,17 +8,21 @@ package raft
 // test with the original before submitting.
 //
 
-import "../labrpc"
-import "log"
-import "sync"
-import "testing"
-import "runtime"
-import "math/rand"
-import crand "crypto/rand"
-import "math/big"
-import "encoding/base64"
-import "time"
-import "fmt"
+import (
+	"log"
+	"math/rand"
+	"runtime"
+	"sync"
+	"testing"
+
+	"../labrpc"
+
+	crand "crypto/rand"
+	"encoding/base64"
+	"fmt"
+	"math/big"
+	"time"
+)
 
 func randstring(n int) string {
 	b := make([]byte, 2*n)
@@ -134,6 +138,7 @@ func (cfg *config) crash1(i int) {
 // this server. since we cannot really kill it.
 //
 func (cfg *config) start1(i int) {
+	DPrintf("TEST - Restarting %d", i)
 	cfg.crash1(i)
 
 	// a fresh set of outgoing ClientEnd names.
@@ -234,6 +239,7 @@ func (cfg *config) cleanup() {
 // attach server i to the net.
 func (cfg *config) connect(i int) {
 	// fmt.Printf("connect(%d)\n", i)
+	DPrintf("TEST - Connecting %d", i)
 
 	cfg.connected[i] = true
 
@@ -257,6 +263,7 @@ func (cfg *config) connect(i int) {
 // detach server i from the net.
 func (cfg *config) disconnect(i int) {
 	// fmt.Printf("disconnect(%d)\n", i)
+	DPrintf("TEST - Disconnecting %d", i)
 
 	cfg.connected[i] = false
 
@@ -428,6 +435,7 @@ func (cfg *config) wait(index int, n int, startTerm int) interface{} {
 // if retry==false, calls Start() only once, in order
 // to simplify the early Lab 2B tests.
 func (cfg *config) one(cmd interface{}, expectedServers int, retry bool) int {
+	DPrintf("TEST - Begin one(%v)", cmd)
 	t0 := time.Now()
 	starts := 0
 	for time.Since(t0).Seconds() < 10 {
@@ -460,6 +468,7 @@ func (cfg *config) one(cmd interface{}, expectedServers int, retry bool) int {
 					// committed
 					if cmd1 == cmd {
 						// and it was the command we submitted.
+						DPrintf("TEST - one(%v) succeeded", cmd)
 						return index
 					}
 				}
