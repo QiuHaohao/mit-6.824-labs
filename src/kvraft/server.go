@@ -23,6 +23,13 @@ type Op struct {
 	// Your definitions here.
 	// Field names must start with capital letters,
 	// otherwise RPC will break.
+	Args interface{}
+	ResultChan chan *OpResult
+}
+
+type OpResult struct {
+	Value string
+	Err   Err
 }
 
 type KVServer struct {
@@ -35,15 +42,71 @@ type KVServer struct {
 	maxraftstate int // snapshot if log grows this big
 
 	// Your definitions here.
+	store map[string]string
+
+}
+
+func (kv *KVServer) execOp(args interface{}) *OpResult {
+	resultChan := make(chan *OpResult, 1)
+	_, _, isLeader := kv.rf.Start(&Op{
+		Args:       args,
+		ResultChan: resultChan,
+	})
+	if !isLeader {
+		return &OpResult{Err: ErrWrongLeader}
+	}
+	// wait for the op to be executed
+	return <-resultChan
+}
+
+func (kv *KVServer) applier() {
+	for {
+		op := (<- kv.applyCh).Command.(*Op)
+		args := op.Args
+		switch args.(type) {
+		case *GetArgs:
+			kv.mu.Lock()
+			val, ok := kv.store[args.(*GetArgs).Key]
+			kv.mu.Unlock()
+			if ok {
+				op.ResultChan <- &OpResult{
+					Value: val,
+					Err:   OK,
+				}
+			} else {
+				op.ResultChan <- &OpResult{
+					Err:   ErrNoKey,
+				}
+			}
+		case *PutAppendArgs:
+			prefix := ""
+			key := args.(*PutAppendArgs).Key
+			kv.mu.Lock()
+			if args.(*PutAppendArgs).Op == OpAppend {
+				if val, ok := kv.store[key]; ok {
+					prefix = val
+				}
+			}
+			newVal := prefix + args.(*PutAppendArgs).Value
+			kv.store[key] = newVal
+			kv.mu.Unlock()
+			op.ResultChan <- &OpResult{
+				Value: newVal,
+				Err:   OK,
+			}
+		}
+	}
 }
 
 
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
-	// Your code here.
+	res := kv.execOp(args)
+	reply.Value = res.Value
+	reply.Err = res.Err
 }
 
 func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
-	// Your code here.
+	reply.Err = kv.execOp(args).Err
 }
 
 //

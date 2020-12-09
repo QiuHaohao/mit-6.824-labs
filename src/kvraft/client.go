@@ -1,6 +1,9 @@
 package kvraft
 
-import "../labrpc"
+import (
+	"../labrpc"
+	"reflect"
+)
 import "crypto/rand"
 import "math/big"
 
@@ -8,6 +11,8 @@ import "math/big"
 type Clerk struct {
 	servers []*labrpc.ClientEnd
 	// You will have to modify this struct.
+	leaderIndex uint32
+	leaderLost bool
 }
 
 func nrand() int64 {
@@ -17,11 +22,47 @@ func nrand() int64 {
 	return x
 }
 
+func getErr(reply interface{}) Err {
+	return Err(reflect.ValueOf(reply).Elem().FieldByName("Err").String())
+}
+
 func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 	ck := new(Clerk)
 	ck.servers = servers
+	ck.leaderIndex = uint32(nrand() % int64(len(servers)))
+	ck.leaderLost = true
 	// You'll have to add code here.
 	return ck
+}
+
+func (ck *Clerk) getServerIndex() uint32 {
+	if ck.leaderLost {
+		ck.leaderIndex = (ck.leaderIndex + 1) % uint32(len(ck.servers))
+		return ck.leaderIndex
+	}
+	return ck.leaderIndex
+}
+
+func (ck *Clerk) markLeaderLost() {
+	ck.leaderLost = true
+}
+
+func (ck *Clerk) markLeaderFound(leaderIndex uint32) {
+	ck.leaderLost = false
+	ck.leaderIndex = leaderIndex
+}
+
+func (ck *Clerk) call(svcMeth string, args interface{}, reply interface{}, needRetry func(interface{}) bool) {
+	// only exit the loop when a valid result is received from any server
+	for {
+		leaderIndex := ck.getServerIndex()
+		ok := ck.servers[leaderIndex].Call(svcMeth, args, reply)
+		if ok && !needRetry(reply) {
+			ck.markLeaderFound(leaderIndex)
+			return
+		}
+		ck.markLeaderLost()
+	}
 }
 
 //
@@ -37,9 +78,13 @@ func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 // arguments. and reply must be passed as a pointer.
 //
 func (ck *Clerk) Get(key string) string {
-
-	// You will have to modify this function.
-	return ""
+	args := &GetArgs{Key: key}
+	reply := &GetReply{}
+	ck.call("KVServer.Get", args, reply, func(reply interface{}) bool {
+		err := reply.(*GetReply).Err
+		return err == OK || err == ErrNoKey
+	})
+	return reply.Value
 }
 
 //
@@ -53,12 +98,17 @@ func (ck *Clerk) Get(key string) string {
 // arguments. and reply must be passed as a pointer.
 //
 func (ck *Clerk) PutAppend(key string, value string, op string) {
-	// You will have to modify this function.
+	args := &PutAppendArgs{Key: key, Value: value, Op: op}
+	reply := &PutAppendReply{}
+	ck.call("KVServer.PutAppend", args, reply, func(reply interface{}) bool {
+		err := reply.(*GetReply).Err
+		return err == OK
+	})
 }
 
 func (ck *Clerk) Put(key string, value string) {
-	ck.PutAppend(key, value, "Put")
+	ck.PutAppend(key, value, OpPut)
 }
 func (ck *Clerk) Append(key string, value string) {
-	ck.PutAppend(key, value, "Append")
+	ck.PutAppend(key, value, OpAppend)
 }
