@@ -270,7 +270,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	if !(rf.status == Leader) {
 		return -1, rf.currentTerm, false
 	}
-	DPrintf("[%d] - Starting to replicate log %v", rf.me, command)
+	DPrintf("[%d] - Starting to replicate log %+v", rf.me, command)
 	rf.log = append(rf.log, &LogEntry{
 		Command: command,
 		Term:    rf.currentTerm,
@@ -286,9 +286,9 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 // maybe can
 func (rf *Raft) applyNewMsgs() {
 	for rf.commitIndex > rf.lastApplied {
-		DPrintf("[%d] - committing log entry at %d", rf.me, rf.lastApplied+1)
 		commandIndex := rf.lastApplied + 1
 		logEntry, err := rf.getLogAtIndex(commandIndex)
+		DPrintf("[%d] - committing log entry at %d: %+v", rf.me, rf.lastApplied+1, logEntry)
 		if err != nil {
 			panic("log entry that should be committed is not found")
 		}

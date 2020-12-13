@@ -3,8 +3,9 @@ package kvraft
 import (
 	"../labgob"
 	"../labrpc"
-	"log"
 	"../raft"
+	"fmt"
+	"log"
 	"sync"
 	"sync/atomic"
 )
@@ -23,8 +24,9 @@ type Op struct {
 	// Your definitions here.
 	// Field names must start with capital letters,
 	// otherwise RPC will break.
-	Args interface{}
-	ResultChan chan *OpResult
+	Type string
+	PutAppendArgs *PutAppendArgs
+	GetArgs *GetArgs
 }
 
 type OpResult struct {
@@ -38,75 +40,112 @@ type KVServer struct {
 	rf      *raft.Raft
 	applyCh chan raft.ApplyMsg
 	dead    int32 // set by Kill()
+	resultChans map[int64]chan *OpResult
 
 	maxraftstate int // snapshot if log grows this big
 
 	// Your definitions here.
 	store map[string]string
 
-}
 
-func (kv *KVServer) execOp(args interface{}) *OpResult {
-	resultChan := make(chan *OpResult, 1)
-	_, _, isLeader := kv.rf.Start(&Op{
-		Args:       args,
-		ResultChan: resultChan,
-	})
-	if !isLeader {
-		return &OpResult{Err: ErrWrongLeader}
+
+}
+func getId(op Op) int64 {
+	switch op.Type {
+	case OpTypeGet:
+		return op.GetArgs.Id
+	case OpTypePutAppend:
+		return op.PutAppendArgs.Id
+	default:
+		panic(fmt.Sprintf("unknown op type: %v", op.Type))
 	}
-	// wait for the op to be executed
-	return <-resultChan
+}
+func (kv *KVServer) execOp(op Op) (resultChan chan *OpResult) {
+	resultChan = make(chan *OpResult, 1)
+	id := getId(op)
+	kv.mu.Lock()
+	kv.resultChans[id] = resultChan
+	kv.mu.Unlock()
+	_, _, isLeader := kv.rf.Start(op)
+	if !isLeader {
+		resultChan <- &OpResult{Err: ErrWrongLeader}
+		return
+	}
+	DPrintf("[%v] - execOp - %+v", kv.me, op)
+	return
 }
 
 func (kv *KVServer) applier() {
 	for {
-		op := (<- kv.applyCh).Command.(*Op)
-		args := op.Args
-		switch args.(type) {
-		case *GetArgs:
+		DPrintf("[%v] - applier starts waiting for applyCh", kv.me)
+		op := (<- kv.applyCh).Command.(Op)
+		DPrintf("[%v] - applier got op:%v", kv.me, op)
+		kv.mu.Lock()
+		resultChan := kv.resultChans[getId(op)]
+		delete(kv.resultChans, getId(op))
+		kv.mu.Unlock()
+		DPrintf("[%v] - applier applying %+v", kv.me, op)
+		switch op.Type {
+		case OpTypeGet:
+			args := op.GetArgs
 			kv.mu.Lock()
-			val, ok := kv.store[args.(*GetArgs).Key]
+			val, ok := kv.store[args.Key]
 			kv.mu.Unlock()
-			if ok {
-				op.ResultChan <- &OpResult{
-					Value: val,
-					Err:   OK,
-				}
-			} else {
-				op.ResultChan <- &OpResult{
-					Err:   ErrNoKey,
+			if resultChan != nil {
+				if ok {
+					resultChan <- &OpResult{
+						Value: val,
+						Err:   OK,
+					}
+				} else {
+					resultChan <- &OpResult{
+						Err:   ErrNoKey,
+					}
 				}
 			}
-		case *PutAppendArgs:
+		case OpTypePutAppend:
+			args := op.PutAppendArgs
 			prefix := ""
-			key := args.(*PutAppendArgs).Key
+			key := args.Key
 			kv.mu.Lock()
-			if args.(*PutAppendArgs).Op == OpAppend {
+			if args.Op == OpAppend {
 				if val, ok := kv.store[key]; ok {
 					prefix = val
 				}
 			}
-			newVal := prefix + args.(*PutAppendArgs).Value
+			newVal := prefix + args.Value
 			kv.store[key] = newVal
 			kv.mu.Unlock()
-			op.ResultChan <- &OpResult{
-				Value: newVal,
-				Err:   OK,
+			if resultChan != nil {
+				resultChan <- &OpResult{
+					Value: newVal,
+					Err:   OK,
+				}
 			}
+		default:
+			panic(fmt.Sprintf("unknown op type: %v", op.Type))
 		}
+		DPrintf("[%v] - applied op:%v", kv.me, op)
 	}
 }
 
 
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
-	res := kv.execOp(args)
+	res := <- kv.execOp(Op{
+		Type:          OpTypeGet,
+		GetArgs:       args,
+	})
 	reply.Value = res.Value
 	reply.Err = res.Err
 }
 
 func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
-	reply.Err = kv.execOp(args).Err
+	DPrintf("[%v] - server put append: args: %v", kv.me, args)
+	reply.Err = (<- kv.execOp(Op{
+		Type:          OpTypePutAppend,
+		PutAppendArgs: args,
+	})).Err
+	DPrintf("[%v] - server put append: reply: %v", kv.me, reply)
 }
 
 //
@@ -157,8 +196,11 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 
 	kv.applyCh = make(chan raft.ApplyMsg)
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
+	kv.resultChans = make(map[int64]chan *OpResult)
+	kv.store = make(map[string]string)
+
+	go kv.applier()
 
 	// You may need initialization code here.
-
 	return kv
 }

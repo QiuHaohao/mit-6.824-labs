@@ -79,9 +79,9 @@ func (rf *Raft) handleAppendEntries(server int, term int,
 	prevLogIndex int, prevLogTerm int, entries []*LogEntry, leaderCommit int) {
 
 	if len(entries) == 0 {
-		DPrintf("[%d] - Empty AppendEntries for term %d sent to %d, nextIndex[%d]: %d", rf.me, term, server, server, rf.nextIndex[server])
+		DPrintf("[%d] - Sending empty AppendEntries for term %d to %d, nextIndex[%d]: %d", rf.me, term, server, server, rf.nextIndex[server])
 	} else {
-		DPrintf("[%d] - Non-empty AppendEntries for term %d sent to %d, nextIndex[%d]: %d", rf.me, term, server, server, rf.nextIndex[server])
+		DPrintf("[%d] - Sending non-empty AppendEntries for term %d to %d, nextIndex[%d]: %d", rf.me, term, server, server, rf.nextIndex[server])
 	}
 	ok, termRecved, success := rf.sendAppendEntries(
 		server, term,
@@ -90,6 +90,7 @@ func (rf *Raft) handleAppendEntries(server int, term int,
 		entries,
 		leaderCommit,
 	)
+	DPrintf("[%d] - Sent AppendEntries for term %d to %d, ok: %v, termRecvd: %v, success: %v", rf.me, term, server, ok, termRecved, success)
 	rf.mu.Lock()
 	// if the request succeeded and I am still the leader of the same term
 	if ok && term == rf.currentTerm && rf.status == Leader {
@@ -102,7 +103,9 @@ func (rf *Raft) handleAppendEntries(server int, term int,
 				termOfLastConsensus, _ := rf.getLogTerm(indexOfLastConsensus)
 				if indexOfLastConsensus > rf.commitIndex && termOfLastConsensus == rf.currentTerm {
 					rf.commitIndex = indexOfLastConsensus
+					DPrintf("[%d] - leader applying msg", rf.me)
 					rf.applyNewMsgs()
+					DPrintf("[%d] - leader applied msg", rf.me)
 				}
 			}
 			if rf.nextIndex[server] < indexLastLogSent+1 {

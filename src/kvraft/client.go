@@ -29,6 +29,7 @@ func getErr(reply interface{}) Err {
 func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 	ck := new(Clerk)
 	ck.servers = servers
+	// randomly initialize the leader index
 	ck.leaderIndex = uint32(nrand() % int64(len(servers)))
 	ck.leaderLost = true
 	// You'll have to add code here.
@@ -78,12 +79,14 @@ func (ck *Clerk) call(svcMeth string, args interface{}, reply interface{}, needR
 // arguments. and reply must be passed as a pointer.
 //
 func (ck *Clerk) Get(key string) string {
-	args := &GetArgs{Key: key}
+	DPrintf("clerk get key start - %v", key)
+	args := &GetArgs{Id: nrand(), Key: key}
 	reply := &GetReply{}
 	ck.call("KVServer.Get", args, reply, func(reply interface{}) bool {
 		err := reply.(*GetReply).Err
-		return err == OK || err == ErrNoKey
+		return !(err == OK || err == ErrNoKey)
 	})
+	DPrintf("clerk get key reply - %+v", reply)
 	return reply.Value
 }
 
@@ -98,12 +101,14 @@ func (ck *Clerk) Get(key string) string {
 // arguments. and reply must be passed as a pointer.
 //
 func (ck *Clerk) PutAppend(key string, value string, op string) {
-	args := &PutAppendArgs{Key: key, Value: value, Op: op}
+	DPrintf("clerk PutAppend start - %v: %v", key, value)
+	args := &PutAppendArgs{Id: nrand(), Key: key, Value: value, Op: op}
 	reply := &PutAppendReply{}
 	ck.call("KVServer.PutAppend", args, reply, func(reply interface{}) bool {
-		err := reply.(*GetReply).Err
-		return err == OK
+		err := reply.(*PutAppendReply).Err
+		return err != OK
 	})
+	DPrintf("clerk PutAppend reply - %+v", reply)
 }
 
 func (ck *Clerk) Put(key string, value string) {
