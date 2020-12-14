@@ -79,9 +79,9 @@ func (rf *Raft) handleAppendEntries(server int, term int,
 	prevLogIndex int, prevLogTerm int, entries []*LogEntry, leaderCommit int) {
 
 	if len(entries) == 0 {
-		DPrintf("[%d] - Sending empty AppendEntries for term %d to %d, nextIndex[%d]: %d", rf.me, term, server, server, rf.nextIndex[server])
+		DPrintf("[%d] - Sending empty AppendEntries for term %d to %d", rf.me, term, server, server)
 	} else {
-		DPrintf("[%d] - Sending non-empty AppendEntries for term %d to %d, nextIndex[%d]: %d", rf.me, term, server, server, rf.nextIndex[server])
+		DPrintf("[%d] - Sending non-empty AppendEntries for term %d to %d", rf.me, term, server, server)
 	}
 	ok, termRecved, success := rf.sendAppendEntries(
 		server, term,
