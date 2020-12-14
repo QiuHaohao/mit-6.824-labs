@@ -11,6 +11,7 @@ import "math/big"
 type Clerk struct {
 	servers []*labrpc.ClientEnd
 	// You will have to modify this struct.
+	id int64
 	leaderIndex uint32
 	leaderLost bool
 }
@@ -32,6 +33,7 @@ func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 	// randomly initialize the leader index
 	ck.leaderIndex = uint32(nrand() % int64(len(servers)))
 	ck.leaderLost = true
+	ck.id = nrand()
 	// You'll have to add code here.
 	return ck
 }
@@ -79,14 +81,14 @@ func (ck *Clerk) call(svcMeth string, args interface{}, reply interface{}, needR
 // arguments. and reply must be passed as a pointer.
 //
 func (ck *Clerk) Get(key string) string {
-	DPrintf("clerk get key start - %v", key)
-	args := &GetArgs{Id: nrand(), Key: key}
+	args := &GetArgs{OpId: nrand(), ClerkId: ck.id, Key: key}
 	reply := &GetReply{}
+	DPrintf("clerk Get start - %+v", args)
 	ck.call("KVServer.Get", args, reply, func(reply interface{}) bool {
 		err := reply.(*GetReply).Err
 		return !(err == OK || err == ErrNoKey)
 	})
-	DPrintf("clerk get key reply - %+v", reply)
+	DPrintf("clerk Get reply - %+v: %+v", args, reply)
 	return reply.Value
 }
 
@@ -101,14 +103,14 @@ func (ck *Clerk) Get(key string) string {
 // arguments. and reply must be passed as a pointer.
 //
 func (ck *Clerk) PutAppend(key string, value string, op string) {
-	DPrintf("clerk PutAppend start - %v: %v", key, value)
-	args := &PutAppendArgs{Id: nrand(), Key: key, Value: value, Op: op}
+	args := &PutAppendArgs{OpId: nrand(), ClerkId: ck.id, Key: key, Value: value, Op: op}
 	reply := &PutAppendReply{}
+	DPrintf("clerk PutAppend start - %+v", args)
 	ck.call("KVServer.PutAppend", args, reply, func(reply interface{}) bool {
 		err := reply.(*PutAppendReply).Err
 		return err != OK
 	})
-	DPrintf("clerk PutAppend reply - %+v", reply)
+	DPrintf("clerk PutAppend reply - %+v: %+v", reply, args)
 }
 
 func (ck *Clerk) Put(key string, value string) {

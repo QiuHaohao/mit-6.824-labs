@@ -58,6 +58,7 @@ type ApplyMsg struct {
 	CommandValid bool
 	Command      interface{}
 	CommandIndex int
+	CommandTerm int
 }
 
 type Status int
@@ -295,8 +296,10 @@ func (rf *Raft) applyNewMsgs() {
 		rf.applyCh <- ApplyMsg{
 			Command:      logEntry.Command,
 			CommandIndex: commandIndex + 1,
+			CommandTerm: logEntry.Term,
 			CommandValid: true,
 		}
+		DPrintf("[%d] - committed log entry at %d: %+v", rf.me, rf.lastApplied+1, logEntry)
 		rf.lastApplied++
 	}
 }

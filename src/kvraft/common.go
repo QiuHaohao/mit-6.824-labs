@@ -20,7 +20,8 @@ type Err string
 
 // Put or Append
 type PutAppendArgs struct {
-	Id    int64
+	OpId  int64
+	ClerkId int64
 	Key   string
 	Value string
 	Op    string // "Put" or "Append"
@@ -34,8 +35,9 @@ type PutAppendReply struct {
 }
 
 type GetArgs struct {
-	Id  int64
-	Key string
+	OpId int64
+	ClerkId int64
+	Key  string
 	// You'll have to add definitions here.
 }
 
